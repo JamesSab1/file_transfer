@@ -34,17 +34,15 @@ int send_file(int socket, const char* filename)
     while (1) 
     {
         // Read data into buffer nd store amount read in bytes_read
-        int bytes_read = fread(buffer, sizeof(char), sizeof(buffer), input_file);
+        size_t bytes_read = fread(buffer, sizeof(char), sizeof(buffer), input_file);
         if (bytes_read == 0) //file read complete
             break;
 
-        if (bytes_read < 0)
+        if (bytes_read == -1 && errno != EINTR)
         {
-            // handle errors
             printf("BYTES READ ERROR: %d", errno);
             return -1;
         }
-
         //You need a loop for the write, because not all of the data may be written
         //in one call; write will return how many bytes were written. p keeps
         //track of where in the buffer we are, while we decrement bytes_read
@@ -52,8 +50,8 @@ int send_file(int socket, const char* filename)
         void *p = buffer;
         while (bytes_read > 0) 
         {
-            int bytes_written = write(socket, p, bytes_read);
-            if (bytes_written <= 0)
+            ssize_t bytes_written = write(socket, p, bytes_read);
+            if (bytes_written == -1 && errno != EINTR)
             {
                 //handle errors
                 printf("BYTES WRITTEN ERROR: %d", errno);
@@ -94,7 +92,7 @@ int client_connect(const char* filename)
     // Convert IPv4 and IPv6 addresses from text to binary form 
     if(inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr)<=0)  
     { 
-        printf("\nInvalid address/ Address not supported \n"); 
+        printf("\nInvalid address/Address not supported \n"); 
         return -1; 
     } 
    
@@ -108,6 +106,7 @@ int client_connect(const char* filename)
     {
         //do some error handling
         printf("Error sending file");
+        return -1;
     }
     close(sock);
 
@@ -120,14 +119,14 @@ int main(int argc, char const *argv[])
     if(argc != 2)
     {
         printf("Usage: ./file_client filemname");
-        exit(1);
+        return -1;
     }
-
-    if(client_connect(argv[1]) == -1);
+    if(client_connect(argv[1]) == -1)
     {
-        //do some error checking for failed socket calls eg EINTR
         printf("File not sent\n");
+        return -1;
     }
 
-    return 0; 
+    printf("%s sent successfully\n", argv[1]);
+    return 0;
 } 
