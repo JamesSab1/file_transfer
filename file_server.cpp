@@ -1,5 +1,4 @@
-
-// file_server.cpp - file server in c++ 
+// file_server.cpp - file server in c/c++ 
 #include <errno.h>
 #include <netinet/in.h> 
 #include <stdio.h>
@@ -12,53 +11,30 @@
 int write_file(const char* filename, int socket)
 {
     //get file size
-    unsigned long long int file_size = 0;
-    unsigned long long int *fs = &file_size;
-    int s = read(socket, fs, sizeof(long long int));
-    if(s == -1 && errno != EINTR) //errno == EINTR will retry?
-    {
-        printf("BYTES READ ERROR: %d", errno);
-        return -1;        
-    }
+    long long file_size = get_file_size(socket);
+    //printf("%lld\n", file_size );
 
     FILE* output_file = fopen(filename, "w");
+    int fd = fileno(output_file);
 
     ssize_t bytes_rec = 0;
     size_t bytes_write = 0;
+
     //read and write bit by bit until done
-    while((bytes_rec = read(socket , buffer, BUFSIZE)) > 0)
+    while(file_size > 0)
     {
-        if(bytes_rec == -1 && errno != EINTR)
+        /*if(file_size < BUFSIZE);
         {
-            //handle errors
-            printf("BYTES READ ERROR: %d", errno);
-            return -1;        
-        }
-
-        //change buffer size at te end of the file
-        if(file_size < BUFSIZE)//better than bytes_rec < BUFSIZE?
-        {
-            char last_buffer[bytes_rec]= {0};
-            bytes_write = fwrite(buffer, sizeof(char), sizeof(last_buffer), output_file);
-            if (bytes_write == -1 && errno != EINTR)
-            {
-                //handle errors
-                printf("BYTES WRITTEN ERROR: %d", errno);
-                return -1;
-                
-            }
-            break;
-        }
-        bytes_write = fwrite(buffer, sizeof(char), sizeof(buffer), output_file);
-        if (bytes_write == -1 && errno != EINTR)
-            {
-                //handle errors
-                printf("BYTES WRITTEN ERROR: %d", errno);
-                return -1;
-                
-            }
-
-        file_size -= bytes_write;
+            char last_buf[file_size] = {0};
+            readn(socket, last_buf, file_size);
+            writen(fd, last_buf, file_size);
+            fclose(output_file);
+            return 0;
+        }*/
+        bytes_rec = readn(socket, buffer, BUFSIZE);
+        bytes_write = writen(fd, buffer, BUFSIZE);
+        file_size -= bytes_rec;
+        printf("%lld\n", file_size);
     }
      
     fclose(output_file);

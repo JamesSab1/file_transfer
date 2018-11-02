@@ -1,75 +1,39 @@
-
 // file_client.cpp - file client in c++ to send files
-#include <unistd.h>
-#include <stdio.h> 
-#include <sys/socket.h> 
-#include <stdlib.h> 
-#include <netinet/in.h> 
-#include <string.h> 
-#include <arpa/inet.h>
-#include <errno.h>
 #include "file_transfer.h"
 
 //sendfile another option sendfile(socket, input_file, NULL, BUFSIZ)) although this is less portable.
 //If you keep the buffer less than say 16K it will likely stay in L1 cache and remain quick.
-
+//read n bytes from a descriptor
 
 int send_file(int socket, const char* filename)
 {
     FILE *input_file = fopen(filename, "r");
-
     if (input_file == NULL)
     {
         printf("No file\n");
         return -1;
     }
+    int fd = fileno(input_file);
 
-    //get file size and send to server
     fseek(input_file, 0, SEEK_END);
-    long long int file_size = ftell(input_file);
+    unsigned long long file_size = ftell(input_file);
     rewind(input_file);
-    long long int *fs = &file_size;
-    write(socket, fs, sizeof(long long int));
+    long long *fs = &file_size;
+    write(socket, fs, sizeof(long long));
 
-    while (1) 
+    while (file_size > 0) 
     {
-        // Read data into buffer nd store amount read in bytes_read
-        size_t bytes_read = fread(buffer, sizeof(char), sizeof(buffer), input_file);
-        if (bytes_read == 0) //file read complete
-            break;
-
-        if (bytes_read == -1 && errno != EINTR)
-        {
-            printf("BYTES READ ERROR: %d", errno);
-            return -1;
-        }
-        //You need a loop for the write, because not all of the data may be written
-        //in one call; write will return how many bytes were written. p keeps
-        //track of where in the buffer we are, while we decrement bytes_read
-        //to keep track of how many bytes are left to write.
-        void *p = buffer;
-        while (bytes_read > 0) 
-        {
-            ssize_t bytes_written = write(socket, p, bytes_read);
-            if (bytes_written == -1 && errno != EINTR)
-            {
-                //handle errors
-                printf("BYTES WRITTEN ERROR: %d", errno);
-                return -1;
-            }
-            bytes_read -= bytes_written;
-            p += bytes_written;            
-        }
+        int bytes_read = readn(fd, buffer, BUFSIZE);
+        writen(socket, buffer, BUFSIZE);
+        file_size -= bytes_read;
     }
-
     fclose(input_file);
-
     return 0;
 }
 
 
 
-int client_connect(const char* filename)
+int client_connect(const char* filename, const char* ip)
 {
     /*** SOCKET PART ***/ 
     struct sockaddr_in address; //though connect() wants a struct sockaddr*, you can still
@@ -90,7 +54,7 @@ int client_connect(const char* filename)
     serv_addr.sin_port = htons(PORT); //host to network conversion
        
     // Convert IPv4 and IPv6 addresses from text to binary form 
-    if(inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr)<=0)  
+    if(inet_pton(AF_INET, ip, &serv_addr.sin_addr)<=0)  
     { 
         printf("\nInvalid address/Address not supported \n"); 
         return -1; 
@@ -105,28 +69,26 @@ int client_connect(const char* filename)
     if(send_file(sock, filename) == -1)
     {
         //do some error handling
-        printf("Error sending file");
+        printf("Error sending file\n");
         return -1;
     }
     close(sock);
-
     return 0;
 }
 
    
 int main(int argc, char const *argv[]) 
 {
-    if(argc != 2)
+    if(argc != 3)
     {
-        printf("Usage: ./file_client filemname");
+        printf("Usage: ./file_client filename ip_address\n");
         return -1;
     }
-    if(client_connect(argv[1]) == -1)
+    if(client_connect(argv[1], argv[2]) == -1)
     {
         printf("File not sent\n");
         return -1;
     }
-
-    printf("%s sent successfully\n", argv[1]);
+    printf("%s sent successfully to %s\n", argv[1], argv[2]);
     return 0;
 } 
